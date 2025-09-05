@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"discord-jowen-golang/internal/config"
+	"discord-jowen-golang/internal/db"
 	"discord-jowen-golang/internal/handlers"
 
 	"github.com/bwmarrin/discordgo"
@@ -24,9 +26,15 @@ func main() {
 	}
 	defer d.Close()
 
-	d.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages // TODO: figure these out actualy
+	// intitialze clients
+	firestoreClient, err := db.NewFirestoreClient(context.Background(), cfg.FirestoreProjectId, cfg.FirestoreDatabaseId)
+	if err != nil {
+		log.Fatalf("Failed to create Firestore client: %v", err)
+	}
 
-	h := handlers.NewHandlers()
+	d.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages // TODO: figure these out actualy
+
+	h := handlers.NewHandlers(firestoreClient)
 	h.RegisterHandlers(d)
 
 	err = d.Open()
@@ -39,5 +47,7 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 
-	h.UnregisterSlashCommands(d)
+	if cfg.UnregisterCommandsOnExit {
+		h.UnregisterSlashCommands(d)
+	}
 }
